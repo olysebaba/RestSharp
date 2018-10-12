@@ -1,13 +1,11 @@
-using System;
+using System.Runtime.Serialization;
 
 namespace RestSharp.Authenticators.OAuth
 {
-#if !SILVERLIGHT && !WINDOWS_PHONE
-	[Serializable]
-#endif
-	internal enum HttpPostParameterType
-	{
-		Field,
-		File
-	}
+    [DataContract]
+    internal enum HttpPostParameterType
+    {
+        Field,
+        File
+    }
 }

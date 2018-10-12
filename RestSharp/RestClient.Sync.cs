@@ -1,120 +1,142 @@
-﻿#if FRAMEWORK
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Net;
-using System.Text;
-using RestSharp.Deserializers;
+﻿using System;
 
 namespace RestSharp
 {
-	public partial class RestClient
-	{
+    public partial class RestClient
+    {
+        /// <summary>
+        ///     Executes the specified request and downloads the response data
+        /// </summary>
+        /// <param name="request">Request to execute</param>
+        /// <returns>Response data</returns>
+        // ReSharper disable once ParameterOnlyUsedForPreconditionCheck.Global
+        public byte[] DownloadData(IRestRequest request) => DownloadData(request, false);
 
-		/// <summary>
-		/// Proxy to use for requests made by this client instance.
-		/// Passed on to underying WebRequest if set.
-		/// </summary>
-		public IWebProxy Proxy { get; set; }
+        /// <summary>
+        ///     Executes the specified request and downloads the response data
+        /// </summary>
+        /// <param name="request">Request to execute</param>
+        /// <param name="throwOnError">Throw an exception if download fails.</param>
+        /// <returns>Response data</returns>
+        // ReSharper disable once ParameterOnlyUsedForPreconditionCheck.Global
+        public byte[] DownloadData(IRestRequest request, bool throwOnError)
+        {
+            var response = Execute(request);
+            if (response.ResponseStatus == ResponseStatus.Error && throwOnError)
+            {
+                throw response.ErrorException;
+            }
 
-		/// <summary>
-		/// Executes the specified request and downloads the response data
-		/// </summary>
-		/// <param name="request">Request to execute</param>
-		/// <returns>Response data</returns>
-		public byte[] DownloadData(IRestRequest request)
-		{
-			var response = Execute(request);
-			return response.RawBytes;
-		}
+            return response.RawBytes;
+        }
 
-		/// <summary>
-		/// Executes the request and returns a response, authenticating if needed
-		/// </summary>
-		/// <param name="request">Request to be executed</param>
-		/// <returns>RestResponse</returns>
-		public virtual IRestResponse Execute(IRestRequest request)
-		{
-			AuthenticateIfNeeded(this, request);
+        /// <summary>
+        ///     Executes the request and returns a response, authenticating if needed
+        /// </summary>
+        /// <param name="request">Request to be executed</param>
+        /// <param name="httpMethod">Override the http method in the request</param>
+        /// <returns>RestResponse</returns>
+        public virtual IRestResponse Execute(IRestRequest request, Method httpMethod)
+        {
+            if (request == null)
+                throw new ArgumentNullException(nameof(request));            
 
-			// add Accept header based on registered deserializers
-			var accepts = string.Join(", ", AcceptTypes.ToArray());
-			AddDefaultParameter("Accept", accepts, ParameterType.HttpHeader);
+            request.Method = httpMethod;
+            return Execute(request);
+        }
+        
+        /// <summary>
+        ///     Executes the request and returns a response, authenticating if needed
+        /// </summary>
+        /// <param name="request">Request to be executed</param>
+        /// <returns>RestResponse</returns>
+        public virtual IRestResponse Execute(IRestRequest request)
+        {
+            var method = Enum.GetName(typeof(Method), request.Method);
 
-			IRestResponse response = new RestResponse();
-			try
-			{
-				response = GetResponse(request);
-				response.Request = request;
-				response.Request.IncreaseNumAttempts();
+            switch (request.Method)
+            {
+                case Method.COPY:
+                case Method.POST:
+                case Method.PUT:
+                case Method.PATCH:
+                case Method.MERGE:
+                    return Execute(request, method, DoExecuteAsPost);
 
-			}
-			catch (Exception ex)
-			{
-				response.ResponseStatus = ResponseStatus.Error;
-				response.ErrorMessage = ex.Message;
-				response.ErrorException = ex;
-			}
+                default:
+                    return Execute(request, method, DoExecuteAsGet);
+            }
+        }
 
-			return response;
-		}
+        public IRestResponse ExecuteAsGet(IRestRequest request, string httpMethod)
+        {
+            return Execute(request, httpMethod, DoExecuteAsGet);
+        }
 
-		/// <summary>
-		/// Executes the specified request and deserializes the response content using the appropriate content handler
-		/// </summary>
-		/// <typeparam name="T">Target deserialization type</typeparam>
-		/// <param name="request">Request to execute</param>
-		/// <returns>RestResponse[[T]] with deserialized data in Data property</returns>
-		public virtual IRestResponse<T> Execute<T>(IRestRequest request) where T : new()
-		{
-			var raw = Execute(request);
-			return Deserialize<T>(request, raw);
-		}
-		
-		private IRestResponse GetResponse(IRestRequest request)
-		{
-			var http = HttpFactory.Create();
+        public IRestResponse ExecuteAsPost(IRestRequest request, string httpMethod)
+        {
+            request.Method = Method.POST; // Required by RestClient.BuildUri... 
 
-			ConfigureHttp(request, http);
-			ConfigureProxy(http);
+            return Execute(request, httpMethod, DoExecuteAsPost);
+        }
 
-			var httpResponse = new HttpResponse();
+        public virtual IRestResponse<T> Execute<T>(IRestRequest request, Method httpMethod) where T : new()
+        {
+            if (request == null)
+                throw new ArgumentNullException(nameof(request));
 
-			switch (request.Method) {
-				case Method.GET:
-					httpResponse = http.Get();
-					break;
-				case Method.POST:
-					httpResponse = http.Post();
-					break;
-				case Method.PUT:
-					httpResponse = http.Put();
-					break;
-				case Method.DELETE:
-					httpResponse = http.Delete();
-					break;
-				case Method.HEAD:
-					httpResponse = http.Head();
-					break;
-				case Method.OPTIONS:
-					httpResponse = http.Options();
-					break;
-				case Method.PATCH:
-					httpResponse = http.Patch();
-					break;
-			}
+            request.Method = httpMethod;
+            return Execute<T>(request);
+        }
+        
+        /// <summary>
+        ///     Executes the specified request and deserializes the response content using the appropriate content handler
+        /// </summary>
+        /// <typeparam name="T">Target deserialization type</typeparam>
+        /// <param name="request">Request to execute</param>
+        /// <returns>RestResponse[[T]] with deserialized data in Data property</returns>
+        public virtual IRestResponse<T> Execute<T>(IRestRequest request) where T : new() 
+            => Deserialize<T>(request, Execute(request));
 
-			var restResponse = ConvertToRestResponse(httpResponse);
-			return restResponse;
-		}
+        public IRestResponse<T> ExecuteAsGet<T>(IRestRequest request, string httpMethod) where T : new() 
+            => Deserialize<T>(request, ExecuteAsGet(request, httpMethod));
 
-		private void ConfigureProxy(IHttp http)
-		{
-			if (Proxy != null)
-			{
-				http.Proxy = Proxy;
-			}
-		}
-	}
+        public IRestResponse<T> ExecuteAsPost<T>(IRestRequest request, string httpMethod) where T : new() 
+            => Deserialize<T>(request, ExecuteAsPost(request, httpMethod));
+
+        private IRestResponse Execute(IRestRequest request, string httpMethod,
+            Func<IHttp, string, HttpResponse> getResponse)
+        {
+            AuthenticateIfNeeded(this, request);
+
+            IRestResponse response = new RestResponse();
+
+            try
+            {
+                var http = ConfigureHttp(request);
+
+                response = ConvertToRestResponse(request, getResponse(http, httpMethod));
+                response.Request = request;
+                response.Request.IncreaseNumAttempts();
+            }
+            catch (Exception ex)
+            {
+                response.ResponseStatus = ResponseStatus.Error;
+                response.ErrorMessage = ex.Message;
+                response.ErrorException = ex;
+            }
+
+            return response;
+        }
+
+        private static HttpResponse DoExecuteAsGet(IHttp http, string method)
+        {
+            return http.AsGet(method);
+        }
+
+        private static HttpResponse DoExecuteAsPost(IHttp http, string method)
+        {
+            return http.AsPost(method);
+        }
+    }
 }
-#endif

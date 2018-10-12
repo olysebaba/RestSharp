@@ -1,14 +1,13 @@
-using System;
+using System.Runtime.Serialization;
 
 namespace RestSharp.Authenticators.OAuth
 {
-#if !SILVERLIGHT && !WINDOWS_PHONE
-	[Serializable]
-#endif
-	public enum OAuthSignatureMethod
-	{
-		HmacSha1,
-		PlainText,
-		RsaSha1
-	}
+    [DataContract]
+    public enum OAuthSignatureMethod
+    {
+        HmacSha1,
+        HmacSha256,
+        PlainText,
+        RsaSha1
+    }
 }

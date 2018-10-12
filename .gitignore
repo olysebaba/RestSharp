@@ -36,3 +36,16 @@ Download/
 #Ignore files from MonoDevelop
 *.pidb
 *.userprefs
+restsharp-computed.nuspec
+Backup/
+*.htm
+*.orig
+DownloadSigned/
+RestSharp.IntegrationTests/config.json
+/.idea/.idea.RestSharp
+/.vs/RestSharp/v15/sqlite3
+/RestSharp.UWP/project.lock.json
+*.ncrunchproject
+*.ncrunchsolution
+/.vs/RestSharp/v15/Server/sqlite3
+/.vs/

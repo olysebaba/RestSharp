@@ -1,4 +1,5 @@
-﻿#region Licensed
+#region Licensed
+
 //   Copyright 2010 John Sheehan
 //
 //   Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,276 +13,323 @@
 //   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //   See the License for the specific language governing permissions and
 //   limitations under the License. 
+
 #endregion
 
 using System;
 using System.Collections.Generic;
 using System.Xml.Linq;
+using NUnit.Framework;
 using RestSharp.Deserializers;
+using RestSharp.Tests.SampleClasses;
+using RestSharp.Tests.SampleClasses.DeserializeAsTest;
 using RestSharp.Tests.SampleClasses.Lastfm;
-using Xunit;
 
 namespace RestSharp.Tests
 {
-	public class NamespacedXmlTests
-	{
-		private const string GuidString = "AC1FC4BC-087A-4242-B8EE-C53EBE9887A5";
+    [TestFixture]
+    public class NamespacedXmlTests
+    {
+        private const string GUID_STRING = "AC1FC4BC-087A-4242-B8EE-C53EBE9887A5";
 
-		[Fact]
-		public void Can_Deserialize_Elements_With_Namespace() {
-			var doc = CreateElementsXml();
+        [Test]
+        public void Can_Deserialize_Elements_With_Namespace()
+        {
+            string doc = CreateElementsXml();
+            RestResponse response = new RestResponse { Content = doc };
+            XmlDeserializer d = new XmlDeserializer { Namespace = "http://restsharp.org" };
+            PersonForXml p = d.Deserialize<PersonForXml>(response);
 
-			var response = new RestResponse { Content = doc };
+            Assert.AreEqual("John Sheehan", p.Name);
+            Assert.AreEqual(new DateTime(2009, 9, 25, 0, 6, 1), p.StartDate);
+            Assert.AreEqual(28, p.Age);
+            Assert.AreEqual(long.MaxValue, p.BigNumber);
+            Assert.AreEqual(99.9999m, p.Percent);
+            Assert.AreEqual(false, p.IsCool);
+            Assert.AreEqual(new Guid(GUID_STRING), p.UniqueId);
+            Assert.AreEqual(new Uri("http://example.com", UriKind.RelativeOrAbsolute), p.Url);
+            Assert.AreEqual(new Uri("/foo/bar", UriKind.RelativeOrAbsolute), p.UrlPath);
+            Assert.NotNull(p.Friends);
+            Assert.AreEqual(10, p.Friends.Count);
+            Assert.NotNull(p.BestFriend);
+            Assert.AreEqual("The Fonz", p.BestFriend.Name);
+            Assert.AreEqual(1952, p.BestFriend.Since);
+        }
 
-			var d = new XmlDeserializer();
-			d.Namespace = "http://restsharp.org";
-			var p = d.Deserialize<PersonForXml>(response);
+        [Test]
+        public void Can_Deserialize_Elements_With_Namespace_Autodetect_Namespace()
+        {
+            string doc = CreateElementsXml();
+            RestResponse response = new RestResponse { Content = doc };
+            XmlDeserializer d = new XmlDeserializer();
+            PersonForXml p = d.Deserialize<PersonForXml>(response);
 
-			Assert.Equal("John Sheehan", p.Name);
-			Assert.Equal(new DateTime(2009, 9, 25, 0, 6, 1), p.StartDate);
-			Assert.Equal(28, p.Age);
-			Assert.Equal(long.MaxValue, p.BigNumber);
-			Assert.Equal(99.9999m, p.Percent);
-			Assert.Equal(false, p.IsCool);
-			Assert.Equal(new Guid(GuidString), p.UniqueId);
-			Assert.Equal(new Uri("http://example.com", UriKind.RelativeOrAbsolute), p.Url);
-			Assert.Equal(new Uri("/foo/bar", UriKind.RelativeOrAbsolute), p.UrlPath);
+            Assert.AreEqual("John Sheehan", p.Name);
+            Assert.AreEqual(new DateTime(2009, 9, 25, 0, 6, 1), p.StartDate);
+            Assert.AreEqual(28, p.Age);
+            Assert.AreEqual(long.MaxValue, p.BigNumber);
+            Assert.AreEqual(99.9999m, p.Percent);
+            Assert.AreEqual(false, p.IsCool);
+            Assert.AreEqual(new Guid(GUID_STRING), p.UniqueId);
+            Assert.AreEqual(new Uri("http://example.com", UriKind.RelativeOrAbsolute), p.Url);
+            Assert.AreEqual(new Uri("/foo/bar", UriKind.RelativeOrAbsolute), p.UrlPath);
+            Assert.NotNull(p.Friends);
+            Assert.AreEqual(10, p.Friends.Count);
+            Assert.NotNull(p.BestFriend);
+            Assert.AreEqual("The Fonz", p.BestFriend.Name);
+            Assert.AreEqual(1952, p.BestFriend.Since);
+        }
 
-			Assert.NotNull(p.Friends);
-			Assert.Equal(10, p.Friends.Count);
+        [Test]
+        public void Can_Deserialize_Attributes_With_Namespace()
+        {
+            string doc = CreateAttributesXml();
+            RestResponse response = new RestResponse { Content = doc };
+            XmlDeserializer d = new XmlDeserializer { Namespace = "http://restsharp.org" };
+            PersonForXml p = d.Deserialize<PersonForXml>(response);
 
-			Assert.NotNull(p.BestFriend);
-			Assert.Equal("The Fonz", p.BestFriend.Name);
-			Assert.Equal(1952, p.BestFriend.Since);
-		}
+            Assert.AreEqual("John Sheehan", p.Name);
+            Assert.AreEqual(new DateTime(2009, 9, 25, 0, 6, 1), p.StartDate);
+            Assert.AreEqual(28, p.Age);
+            Assert.AreEqual(long.MaxValue, p.BigNumber);
+            Assert.AreEqual(99.9999m, p.Percent);
+            Assert.AreEqual(false, p.IsCool);
+            Assert.AreEqual(new Guid(GUID_STRING), p.UniqueId);
+            Assert.AreEqual(new Uri("http://example.com", UriKind.RelativeOrAbsolute), p.Url);
+            Assert.AreEqual(new Uri("/foo/bar", UriKind.RelativeOrAbsolute), p.UrlPath);
+            Assert.NotNull(p.BestFriend);
+            Assert.AreEqual("The Fonz", p.BestFriend.Name);
+            Assert.AreEqual(1952, p.BestFriend.Since);
+        }
 
-		[Fact]
-		public void Can_Deserialize_Elements_With_Namespace_Autodetect_Namespace() {
-			var doc = CreateElementsXml();
-			var response = new RestResponse { Content = doc };
+        [Test]
+        public void Ignore_Protected_Property_That_Exists_In_Data()
+        {
+            string doc = CreateElementsXml();
+            RestResponse response = new RestResponse { Content = doc };
+            XmlDeserializer d = new XmlDeserializer { Namespace = "http://restsharp.org" };
+            PersonForXml p = d.Deserialize<PersonForXml>(response);
 
-			var d = new XmlDeserializer();
-			var p = d.Deserialize<PersonForXml>(response);
+            Assert.Null(p.IgnoreProxy);
+        }
 
-			Assert.Equal("John Sheehan", p.Name);
-			Assert.Equal(new DateTime(2009, 9, 25, 0, 6, 1), p.StartDate);
-			Assert.Equal(28, p.Age);
-			Assert.Equal(long.MaxValue, p.BigNumber);
-			Assert.Equal(99.9999m, p.Percent);
-			Assert.Equal(false, p.IsCool);
-			Assert.Equal(new Guid(GuidString), p.UniqueId);
-			Assert.Equal(new Uri("http://example.com", UriKind.RelativeOrAbsolute), p.Url);
-			Assert.Equal(new Uri("/foo/bar", UriKind.RelativeOrAbsolute), p.UrlPath);
+        [Test]
+        public void Ignore_ReadOnly_Property_That_Exists_In_Data()
+        {
+            string doc = CreateElementsXml();
+            RestResponse response = new RestResponse { Content = doc };
+            XmlDeserializer d = new XmlDeserializer { Namespace = "http://restsharp.org" };
+            PersonForXml p = d.Deserialize<PersonForXml>(response);
 
-			Assert.NotNull(p.Friends);
-			Assert.Equal(10, p.Friends.Count);
+            Assert.Null(p.ReadOnlyProxy);
+        }
 
-			Assert.NotNull(p.BestFriend);
-			Assert.Equal("The Fonz", p.BestFriend.Name);
-			Assert.Equal(1952, p.BestFriend.Since);
-		}
+        [Test]
+        public void Can_Deserialize_Names_With_Underscores_With_Namespace()
+        {
+            string doc = CreateUnderscoresXml();
+            RestResponse response = new RestResponse { Content = doc };
+            XmlDeserializer d = new XmlDeserializer { Namespace = "http://restsharp.org" };
+            PersonForXml p = d.Deserialize<PersonForXml>(response);
 
-		[Fact]
-		public void Can_Deserialize_Attributes_With_Namespace() {
-			var doc = CreateAttributesXml();
-			var response = new RestResponse { Content = doc };
+            Assert.AreEqual("John Sheehan", p.Name);
+            Assert.AreEqual(new DateTime(2009, 9, 25, 0, 6, 1), p.StartDate);
+            Assert.AreEqual(28, p.Age);
+            Assert.AreEqual(long.MaxValue, p.BigNumber);
+            Assert.AreEqual(99.9999m, p.Percent);
+            Assert.AreEqual(false, p.IsCool);
+            Assert.AreEqual(new Guid(GUID_STRING), p.UniqueId);
+            Assert.AreEqual(new Uri("http://example.com", UriKind.RelativeOrAbsolute), p.Url);
+            Assert.AreEqual(new Uri("/foo/bar", UriKind.RelativeOrAbsolute), p.UrlPath);
+            Assert.NotNull(p.Friends);
+            Assert.AreEqual(10, p.Friends.Count);
+            Assert.NotNull(p.BestFriend);
+            Assert.AreEqual("The Fonz", p.BestFriend.Name);
+            Assert.AreEqual(1952, p.BestFriend.Since);
+            Assert.NotNull(p.Foes);
+            Assert.AreEqual(5, p.Foes.Count);
+            Assert.AreEqual("Yankees", p.Foes.Team);
+        }
 
-			var d = new XmlDeserializer();
-			d.Namespace = "http://restsharp.org";
-			var p = d.Deserialize<PersonForXml>(response);
+        [Test]
+        public void Can_Deserialize_List_Of_Primitives_With_Namespace()
+        {
+            string doc = CreateListOfPrimitivesXml();
+            RestResponse response = new RestResponse { Content = doc };
+            XmlDeserializer d = new XmlDeserializer { Namespace = "http://restsharp.org" };
+            List<artist> a = d.Deserialize<List<artist>>(response);
 
-			Assert.Equal("John Sheehan", p.Name);
-			Assert.Equal(new DateTime(2009, 9, 25, 0, 6, 1), p.StartDate);
-			Assert.Equal(28, p.Age);
-			Assert.Equal(long.MaxValue, p.BigNumber);
-			Assert.Equal(99.9999m, p.Percent);
-			Assert.Equal(false, p.IsCool);
-			Assert.Equal(new Guid(GuidString), p.UniqueId);
-			Assert.Equal(new Uri("http://example.com", UriKind.RelativeOrAbsolute), p.Url);
-			Assert.Equal(new Uri("/foo/bar", UriKind.RelativeOrAbsolute), p.UrlPath);
+            Assert.AreEqual(2, a.Count);
+            Assert.AreEqual("first", a[0].Value);
+            Assert.AreEqual("second", a[1].Value);
+        }
 
-			Assert.NotNull(p.BestFriend);
-			Assert.Equal("The Fonz", p.BestFriend.Name);
-			Assert.Equal(1952, p.BestFriend.Since);
-		}
+        [Test]
+        public void Can_Deserialize_Attribute_Using_Exact_Name_Defined_In_DeserializeAs_Attribute()
+        {
+            const string @namespace = "http://restsharp.org";
+            XNamespace ns = XNamespace.Get(@namespace);
+            XDocument doc = new XDocument(
+                new XElement(ns + "response",
+                    new XAttribute(ns + "attribute-value", "711"),
+                        "random value"));
 
-		[Fact]
-		public void Ignore_Protected_Property_That_Exists_In_Data() {
-			var doc = CreateElementsXml();
-			var response = new RestResponse { Content = doc };
+            var expected = new NodeWithAttributeAndValue
+            {
+                AttributeValue = "711"
+            };
 
-			var d = new XmlDeserializer();
-			d.Namespace = "http://restsharp.org";
-			var p = d.Deserialize<PersonForXml>(response);
+            XmlDeserializer xml = new XmlDeserializer() { Namespace = @namespace };
+            NodeWithAttributeAndValue output = xml.Deserialize<NodeWithAttributeAndValue>(new RestResponse { Content = doc.ToString() });
 
-			Assert.Null(p.IgnoreProxy);
-		}
+            Assert.AreEqual(expected.AttributeValue, output.AttributeValue);
+        }
 
-		[Fact]
-		public void Ignore_ReadOnly_Property_That_Exists_In_Data() {
-			var doc = CreateElementsXml();
-			var response = new RestResponse { Content = doc };
+        [Test]
+        public void Can_Deserialize_Node_Using_Exact_Name_Defined_In_DeserializeAs_Attribute()
+        {
+            const string @namespace = "http://restsharp.org";
+            XNamespace ns = XNamespace.Get(@namespace);
+            XDocument doc = new XDocument(
+                new XElement(ns + "response",
+                    new XElement(ns + "node-value", "711")));
+            
+            var expected = new SingleNode
+            {
+                Node = "711"
+            };
 
-			var d = new XmlDeserializer();
-			d.Namespace = "http://restsharp.org";
-			var p = d.Deserialize<PersonForXml>(response);
+            XmlDeserializer xml = new XmlDeserializer();
+            SingleNode output = xml.Deserialize<SingleNode>(new RestResponse { Content = doc.ToString() });
 
-			Assert.Null(p.ReadOnlyProxy);
-		}
+            Assert.IsNotNull(output);
 
-		[Fact]
-		public void Can_Deserialize_Names_With_Underscores_With_Namespace() {
-			var doc = CreateUnderscoresXml();
-			var response = new RestResponse { Content = doc };
+            Assert.AreEqual(expected.Node, output.Node);
+        }
 
-			var d = new XmlDeserializer();
-			d.Namespace = "http://restsharp.org";
-			var p = d.Deserialize<PersonForXml>(response);
+        private static string CreateListOfPrimitivesXml()
+        {
+            XDocument doc = new XDocument();
+            XNamespace ns = XNamespace.Get("http://restsharp.org");
+            XElement root = new XElement(ns + "artists");
 
-			Assert.Equal("John Sheehan", p.Name);
-			Assert.Equal(new DateTime(2009, 9, 25, 0, 6, 1), p.StartDate);
-			Assert.Equal(28, p.Age);
-			Assert.Equal(long.MaxValue, p.BigNumber);
-			Assert.Equal(99.9999m, p.Percent);
-			Assert.Equal(false, p.IsCool);
-			Assert.Equal(new Guid(GuidString), p.UniqueId);
-			Assert.Equal(new Uri("http://example.com", UriKind.RelativeOrAbsolute), p.Url);
-			Assert.Equal(new Uri("/foo/bar", UriKind.RelativeOrAbsolute), p.UrlPath);
+            root.Add(new XElement(ns + "artist", "first"));
+            root.Add(new XElement(ns + "artist", "second"));
+            doc.Add(root);
 
-			Assert.NotNull(p.Friends);
-			Assert.Equal(10, p.Friends.Count);
+            return doc.ToString();
+        }
 
-			Assert.NotNull(p.BestFriend);
-			Assert.Equal("The Fonz", p.BestFriend.Name);
-			Assert.Equal(1952, p.BestFriend.Since);
+        private static string CreateUnderscoresXml()
+        {
+            XDocument doc = new XDocument();
+            XNamespace ns = XNamespace.Get("http://restsharp.org");
+            XElement root = new XElement(ns + "Person");
 
-			Assert.NotNull(p.Foes);
-			Assert.Equal(5, p.Foes.Count);
-			Assert.Equal("Yankees", p.Foes.Team);
-		}
+            root.Add(new XElement(ns + "Name", "John Sheehan"));
+            root.Add(new XElement(ns + "Start_Date", new DateTime(2009, 9, 25, 0, 6, 1)));
+            root.Add(new XAttribute(ns + "Age", 28));
+            root.Add(new XElement(ns + "Percent", 99.9999m));
+            root.Add(new XElement(ns + "Big_Number", long.MaxValue));
+            root.Add(new XAttribute(ns + "Is_Cool", false));
+            root.Add(new XElement(ns + "Ignore", "dummy"));
+            root.Add(new XAttribute(ns + "Read_Only", "dummy"));
+            root.Add(new XAttribute(ns + "Unique_Id", new Guid(GUID_STRING)));
+            root.Add(new XElement(ns + "Url", "http://example.com"));
+            root.Add(new XElement(ns + "Url_Path", "/foo/bar"));
+            root.Add(new XElement(ns + "Best_Friend",
+                new XElement(ns + "Name", "The Fonz"),
+                new XAttribute(ns + "Since", 1952)));
 
-		[Fact]
-		public void Can_Deserialize_List_Of_Primitives_With_Namespace() {
-			var doc = CreateListOfPrimitivesXml();
-			var response = new RestResponse { Content = doc };
+            XElement friends = new XElement(ns + "Friends");
 
-			var d = new XmlDeserializer();
-			d.Namespace = "http://restsharp.org";
-			var a = d.Deserialize<List<artist>>(response);
+            for (int i = 0; i < 10; i++)
+            {
+                friends.Add(new XElement(ns + "Friend",
+                    new XElement(ns + "Name", "Friend" + i),
+                    new XAttribute(ns + "Since", DateTime.Now.Year - i)));
+            }
 
-			Assert.Equal(2, a.Count);
-			Assert.Equal("first", a[0].Value);
-			Assert.Equal("second", a[1].Value);
-		}
+            root.Add(friends);
 
-		private static string CreateListOfPrimitivesXml() {
-			var doc = new XDocument();
-			var ns = XNamespace.Get("http://restsharp.org");
-			var root = new XElement(ns + "artists");
-			root.Add(new XElement(ns + "artist", "first"));
-			root.Add(new XElement(ns + "artist", "second"));
-			doc.Add(root);
-			return doc.ToString();
-		}
+            XElement foes = new XElement(ns + "Foes");
 
-		private static string CreateUnderscoresXml() {
-			var doc = new XDocument();
-			var ns = XNamespace.Get("http://restsharp.org");
-			var root = new XElement(ns + "Person");
-			root.Add(new XElement(ns + "Name", "John Sheehan"));
-			root.Add(new XElement(ns + "Start_Date", new DateTime(2009, 9, 25, 0, 6, 1)));
-			root.Add(new XAttribute(ns + "Age", 28));
-			root.Add(new XElement(ns + "Percent", 99.9999m));
-			root.Add(new XElement(ns + "Big_Number", long.MaxValue));
-			root.Add(new XAttribute(ns + "Is_Cool", false));
-			root.Add(new XElement(ns + "Ignore", "dummy"));
-			root.Add(new XAttribute(ns + "Read_Only", "dummy"));
-			root.Add(new XAttribute(ns + "Unique_Id", new Guid(GuidString)));
-			root.Add(new XElement(ns + "Url", "http://example.com"));
-			root.Add(new XElement(ns + "Url_Path", "/foo/bar"));
+            foes.Add(new XAttribute(ns + "Team", "Yankees"));
 
-			root.Add(new XElement(ns + "Best_Friend",
-						new XElement(ns + "Name", "The Fonz"),
-						new XAttribute(ns + "Since", 1952)
-					));
+            for (int i = 0; i < 5; i++)
+            {
+                foes.Add(new XElement(ns + "Foe", new XElement(ns + "Nickname", "Foe" + i)));
+            }
 
-			var friends = new XElement(ns + "Friends");
-			for (int i = 0; i < 10; i++) {
-				friends.Add(new XElement(ns + "Friend",
-								new XElement(ns + "Name", "Friend" + i),
-								new XAttribute(ns + "Since", DateTime.Now.Year - i)
-							));
-			}
-			root.Add(friends);
+            root.Add(foes);
+            doc.Add(root);
 
-			var foes = new XElement(ns + "Foes");
-			foes.Add(new XAttribute(ns + "Team", "Yankees"));
-			for (int i = 0; i < 5; i++) {
-				foes.Add(new XElement(ns + "Foe", new XElement(ns + "Nickname", "Foe" + i)));
-			}
-			root.Add(foes);
+            return doc.ToString();
+        }
 
-			doc.Add(root);
-			return doc.ToString();
-		}
+        private static string CreateElementsXml()
+        {
+            XDocument doc = new XDocument();
+            XNamespace ns = XNamespace.Get("http://restsharp.org");
+            XElement root = new XElement(ns + "Person");
 
-		private static string CreateElementsXml() {
-			var doc = new XDocument();
-			var ns = XNamespace.Get("http://restsharp.org");
-			var root = new XElement(ns + "Person");
-			root.Add(new XElement(ns + "Name", "John Sheehan"));
-			root.Add(new XElement(ns + "StartDate", new DateTime(2009, 9, 25, 0, 6, 1)));
-			root.Add(new XElement(ns + "Age", 28));
-			root.Add(new XElement(ns + "Percent", 99.9999m));
-			root.Add(new XElement(ns + "BigNumber", long.MaxValue));
-			root.Add(new XElement(ns + "IsCool", false));
-			root.Add(new XElement(ns + "Ignore", "dummy"));
-			root.Add(new XElement(ns + "ReadOnly", "dummy"));
-			root.Add(new XElement(ns + "UniqueId", new Guid(GuidString)));
-			root.Add(new XElement(ns + "Url", "http://example.com"));
-			root.Add(new XElement(ns + "UrlPath", "/foo/bar"));
+            root.Add(new XElement(ns + "Name", "John Sheehan"));
+            root.Add(new XElement(ns + "StartDate", new DateTime(2009, 9, 25, 0, 6, 1)));
+            root.Add(new XElement(ns + "Age", 28));
+            root.Add(new XElement(ns + "Percent", 99.9999m));
+            root.Add(new XElement(ns + "BigNumber", long.MaxValue));
+            root.Add(new XElement(ns + "IsCool", false));
+            root.Add(new XElement(ns + "Ignore", "dummy"));
+            root.Add(new XElement(ns + "ReadOnly", "dummy"));
+            root.Add(new XElement(ns + "UniqueId", new Guid(GUID_STRING)));
+            root.Add(new XElement(ns + "Url", "http://example.com"));
+            root.Add(new XElement(ns + "UrlPath", "/foo/bar"));
+            root.Add(new XElement(ns + "BestFriend",
+                new XElement(ns + "Name", "The Fonz"),
+                new XElement(ns + "Since", 1952)));
 
-			root.Add(new XElement(ns + "BestFriend",
-						new XElement(ns + "Name", "The Fonz"),
-						new XElement(ns + "Since", 1952)
-					));
+            XElement friends = new XElement(ns + "Friends");
 
-			var friends = new XElement(ns + "Friends");
-			for (int i = 0; i < 10; i++) {
-				friends.Add(new XElement(ns + "Friend",
-								new XElement(ns + "Name", "Friend" + i),
-								new XElement(ns + "Since", DateTime.Now.Year - i)
-							));
-			}
-			root.Add(friends);
+            for (int i = 0; i < 10; i++)
+            {
+                friends.Add(new XElement(ns + "Friend",
+                    new XElement(ns + "Name", "Friend" + i),
+                    new XElement(ns + "Since", DateTime.Now.Year - i)));
+            }
 
-			doc.Add(root);
-			return doc.ToString();
-		}
+            root.Add(friends);
+            root.Add(new XElement(ns + "FavoriteBand",
+                new XElement(ns + "Name", "Goldfinger")));
 
-		private static string CreateAttributesXml() {
-			var doc = new XDocument();
-			var ns = XNamespace.Get("http://restsharp.org");
-			var root = new XElement(ns + "Person");
-			root.Add(new XAttribute(ns + "Name", "John Sheehan"));
-			root.Add(new XAttribute(ns + "StartDate", new DateTime(2009, 9, 25, 0, 6, 1)));
-			root.Add(new XAttribute(ns + "Age", 28));
-			root.Add(new XAttribute(ns + "Percent", 99.9999m));
-			root.Add(new XAttribute(ns + "BigNumber", long.MaxValue));
-			root.Add(new XAttribute(ns + "IsCool", false));
-			root.Add(new XAttribute(ns + "Ignore", "dummy"));
-			root.Add(new XAttribute(ns + "ReadOnly", "dummy"));
-			root.Add(new XAttribute(ns + "UniqueId", new Guid(GuidString)));
-			root.Add(new XAttribute(ns + "Url", "http://example.com"));
-			root.Add(new XAttribute(ns + "UrlPath", "/foo/bar"));
+            doc.Add(root);
 
-			root.Add(new XElement(ns + "BestFriend",
-						new XAttribute(ns + "Name", "The Fonz"),
-						new XAttribute(ns + "Since", 1952)
-					));
+            return doc.ToString();
+        }
 
-			doc.Add(root);
-			return doc.ToString();
-		}
-	}
+        private static string CreateAttributesXml()
+        {
+            XDocument doc = new XDocument();
+            XNamespace ns = XNamespace.Get("http://restsharp.org");
+            XElement root = new XElement(ns + "Person");
+
+            root.Add(new XAttribute(ns + "Name", "John Sheehan"));
+            root.Add(new XAttribute(ns + "StartDate", new DateTime(2009, 9, 25, 0, 6, 1)));
+            root.Add(new XAttribute(ns + "Age", 28));
+            root.Add(new XAttribute(ns + "Percent", 99.9999m));
+            root.Add(new XAttribute(ns + "BigNumber", long.MaxValue));
+            root.Add(new XAttribute(ns + "IsCool", false));
+            root.Add(new XAttribute(ns + "Ignore", "dummy"));
+            root.Add(new XAttribute(ns + "ReadOnly", "dummy"));
+            root.Add(new XAttribute(ns + "UniqueId", new Guid(GUID_STRING)));
+            root.Add(new XAttribute(ns + "Url", "http://example.com"));
+            root.Add(new XAttribute(ns + "UrlPath", "/foo/bar"));
+            root.Add(new XElement(ns + "BestFriend",
+                new XAttribute(ns + "Name", "The Fonz"),
+                new XAttribute(ns + "Since", 1952)));
+
+            doc.Add(root);
+
+            return doc.ToString();
+        }
+    }
 }

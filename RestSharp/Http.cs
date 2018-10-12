@@ -1,4 +1,5 @@
 ﻿#region License
+
 //   Copyright 2010 John Sheehan
 //
 //   Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,6 +13,7 @@
 //   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //   See the License for the specific language governing permissions and
 //   limitations under the License. 
+
 #endregion
 
 using System;
@@ -19,371 +21,443 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
-using System.Text;
+using System.Net.Cache;
+using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
+using System.Text;
+using System.Text.RegularExpressions;
 using RestSharp.Extensions;
-
-#if WINDOWS_PHONE
-using RestSharp.Compression.ZLib;
-#endif
 
 namespace RestSharp
 {
-	/// <summary>
-	/// HttpWebRequest wrapper
-	/// </summary>
-	public partial class Http : IHttp, IHttpFactory
-	{
-		private const string _lineBreak = "\r\n";
-		private static readonly Encoding _defaultEncoding = Encoding.UTF8;
+    /// <summary>
+    ///     HttpWebRequest wrapper
+    /// </summary>
+    public partial class Http : IHttp
+    {
+        private static readonly string LINE_BREAK = Environment.NewLine;
 
-		///<summary>
-		/// Creates an IHttp
-		///</summary>
-		///<returns></returns>
-		public IHttp Create()
-		{
-			return new Http();
-		}
+        private const string FORM_BOUNDARY = "-----------------------------28947758029299";
 
-		/// <summary>
-		/// True if this HTTP request has any HTTP parameters
-		/// </summary>
-		protected bool HasParameters
-		{
-			get
-			{
-				return Parameters.Any();
-			}
-		}
+        private readonly IDictionary<string, Action<HttpWebRequest, string>> restrictedHeaderActions;
 
-		/// <summary>
-		/// True if this HTTP request has any HTTP cookies
-		/// </summary>
-		protected bool HasCookies
-		{
-			get
-			{
-				return Cookies.Any();
-			}
-		}
+        /// <summary>
+        ///     Default constructor
+        /// </summary>
+        public Http()
+        {
+            Headers = new List<HttpHeader>();
+            Files = new List<HttpFile>();
+            Parameters = new List<HttpParameter>();
+            Cookies = new List<HttpCookie>();
+            restrictedHeaderActions = new Dictionary<string, Action<HttpWebRequest, string>>(
+                StringComparer.OrdinalIgnoreCase);
 
-		/// <summary>
-		/// True if a request body has been specified
-		/// </summary>
-		protected bool HasBody
-		{
-			get
-			{
-				return !string.IsNullOrEmpty(RequestBody);
-			}
-		}
+            AddSharedHeaderActions();
+            AddSyncHeaderActions();
+        }
 
-		/// <summary>
-		/// True if files have been set to be uploaded
-		/// </summary>
-		protected bool HasFiles
-		{
-			get
-			{
-				return Files.Any();
-			}
-		}
+        /// <summary>
+        ///     True if this HTTP request has any HTTP parameters
+        /// </summary>
+        protected bool HasParameters => Parameters.Any();
 
-		/// <summary>
-		/// UserAgent to be sent with request
-		/// </summary>
-		public string UserAgent { get; set; }
-		/// <summary>
-		/// Timeout in milliseconds to be used for the request
-		/// </summary>
-		public int Timeout { get; set; }
-		/// <summary>
-		/// System.Net.ICredentials to be sent with request
-		/// </summary>
-		public ICredentials Credentials { get; set; }
-		/// <summary>
-		/// The System.Net.CookieContainer to be used for the request
-		/// </summary>
-		public CookieContainer CookieContainer { get; set; }
-		/// <summary>
-		/// Collection of files to be sent with request
-		/// </summary>
-		public IList<HttpFile> Files { get; private set; }
-#if !SILVERLIGHT
-		/// <summary>
-		/// Whether or not HTTP 3xx response redirects should be automatically followed
-		/// </summary>
-		public bool FollowRedirects { get; set; }
-#endif
-#if FRAMEWORK
-		/// <summary>
-		/// X509CertificateCollection to be sent with request
-		/// </summary>
-		public X509CertificateCollection ClientCertificates { get; set; }
-		/// <summary>
-		/// Maximum number of automatic redirects to follow if FollowRedirects is true
-		/// </summary>
-		public int? MaxRedirects { get; set; }
-#endif
-		/// <summary>
-		/// HTTP headers to be sent with request
-		/// </summary>
-		public IList<HttpHeader> Headers { get; private set; }
-		/// <summary>
-		/// HTTP parameters (QueryString or Form values) to be sent with request
-		/// </summary>
-		public IList<HttpParameter> Parameters { get; private set; }
-		/// <summary>
-		/// HTTP cookies to be sent with request
-		/// </summary>
-		public IList<HttpCookie> Cookies { get; private set; }
-		/// <summary>
-		/// Request body to be sent with request
-		/// </summary>
-		public string RequestBody { get; set; }
-		/// <summary>
-		/// Content type of the request body.
-		/// </summary>
-		public string RequestContentType { get; set; }
-		/// <summary>
-		/// URL to call for this request
-		/// </summary>
-		public Uri Url { get; set; }
+        /// <summary>
+        ///     True if this HTTP request has any HTTP cookies
+        /// </summary>
+        protected bool HasCookies => Cookies.Any();
 
-#if FRAMEWORK
-		/// <summary>
-		/// Proxy info to be sent with request
-		/// </summary>
-		public IWebProxy Proxy { get; set; }
-#endif
+        /// <summary>
+        ///     True if a request body has been specified
+        /// </summary>
+        protected bool HasBody => RequestBodyBytes != null || !string.IsNullOrEmpty(RequestBody);
 
-		/// <summary>
-		/// Default constructor
-		/// </summary>
-		public Http()
-		{
-			Headers = new List<HttpHeader>();
-			Files = new List<HttpFile>();
-			Parameters = new List<HttpParameter>();
-			Cookies = new List<HttpCookie>();
+        /// <summary>
+        ///     True if files have been set to be uploaded
+        /// </summary>
+        protected bool HasFiles => Files.Any();
 
-			_restrictedHeaderActions = new Dictionary<string, Action<HttpWebRequest, string>>(StringComparer.OrdinalIgnoreCase);
+        /// <summary>
+        /// Enable or disable automatic gzip/deflate decompression
+        /// </summary>
+        public bool AutomaticDecompression { get; set; }
 
-			AddSharedHeaderActions();
-			AddSyncHeaderActions();
-		}
+        /// <summary>
+        ///     Always send a multipart/form-data request - even when no Files are present.
+        /// </summary>
+        public bool AlwaysMultipartFormData { get; set; }
 
-		partial void AddSyncHeaderActions();
-		partial void AddAsyncHeaderActions();
-		private void AddSharedHeaderActions()
-		{
-			_restrictedHeaderActions.Add("Accept", (r, v) => r.Accept = v);
-			_restrictedHeaderActions.Add("Content-Type", (r, v) => r.ContentType = v);
-			_restrictedHeaderActions.Add("Date", (r, v) => { /* Set by system */ });
-			_restrictedHeaderActions.Add("Host", (r, v) => { /* Set by system */ });
-#if FRAMEWORK
-			_restrictedHeaderActions.Add("Range", (r, v) => { AddRange(r, v); });
-#endif
-		}
+        /// <summary>
+        ///     UserAgent to be sent with request
+        /// </summary>
+        public string UserAgent { get; set; }
 
-		private const string FormBoundary = "-----------------------------28947758029299";
-		private static string GetMultipartFormContentType()
-		{
-			return string.Format("multipart/form-data; boundary={0}", FormBoundary);
-		}
-		
-		private static string GetMultipartFileHeader (HttpFile file)
-		{
-			return string.Format ("--{0}{4}Content-Disposition: form-data; name=\"{1}\"; filename=\"{2}\"{4}Content-Type: {3}{4}{4}",
-				FormBoundary, file.Name, file.FileName, file.ContentType ?? "application/octet-stream", _lineBreak);
-		}
-		
-		private static string GetMultipartFormData (HttpParameter param)
-		{
-			return string.Format ("--{0}{3}Content-Disposition: form-data; name=\"{1}\"{3}{3}{2}{3}",
-				FormBoundary, param.Name, param.Value, _lineBreak);
-		}
-		
-		private static string GetMultipartFooter ()
-		{
-			return string.Format ("--{0}--{1}", FormBoundary, _lineBreak);
-		}
-		
-		private readonly IDictionary<string, Action<HttpWebRequest, string>> _restrictedHeaderActions;
+        /// <summary>
+        ///     Timeout in milliseconds to be used for the request
+        /// </summary>
+        public int Timeout { get; set; }
 
-		// handle restricted headers the .NET way - thanks @dimebrain!
-		// http://msdn.microsoft.com/en-us/library/system.net.httpwebrequest.headers.aspx
-		private void AppendHeaders(HttpWebRequest webRequest)
-		{
-			foreach (var header in Headers)
-			{
-				if (_restrictedHeaderActions.ContainsKey(header.Name))
-				{
-					_restrictedHeaderActions[header.Name].Invoke(webRequest, header.Value);
-				}
-				else
-				{
-#if FRAMEWORK
-					webRequest.Headers.Add(header.Name, header.Value);
-#else
-					webRequest.Headers[header.Name] = header.Value;
-#endif
-				}
-			}
-		}
+        /// <summary>
+        ///     The number of milliseconds before the writing or reading times out.
+        /// </summary>
+        public int ReadWriteTimeout { get; set; }
 
-		private void AppendCookies(HttpWebRequest webRequest)
-		{
-			webRequest.CookieContainer = this.CookieContainer ?? new CookieContainer();
-			foreach (var httpCookie in Cookies)
-			{
-#if FRAMEWORK
-                var cookie = new Cookie
-				{
-					Name = httpCookie.Name,
-					Value = httpCookie.Value,
-					Domain = webRequest.RequestUri.Host
-				};
-				webRequest.CookieContainer.Add(cookie);
-#else
-                var cookie = new Cookie
-				{
-					Name = httpCookie.Name,
-					Value = httpCookie.Value
-				};
-				var uri = webRequest.RequestUri;
-				webRequest.CookieContainer.Add(new Uri(string.Format("{0}://{1}", uri.Scheme, uri.Host)), cookie);
-#endif
-            }
-		}
+        /// <summary>
+        ///     System.Net.ICredentials to be sent with request
+        /// </summary>
+        public ICredentials Credentials { get; set; }
 
-		private string EncodeParameters()
-		{
-			var querystring = new StringBuilder();
-			foreach (var p in Parameters)
-			{
-				if (querystring.Length > 1)
-					querystring.Append("&");
-				querystring.AppendFormat("{0}={1}", p.Name.UrlEncode(), p.Value.UrlEncode());
-			}
+        /// <summary>
+        ///     The System.Net.CookieContainer to be used for the request
+        /// </summary>
+        public CookieContainer CookieContainer { get; set; }
 
-			return querystring.ToString();
-		}
+        /// <summary>
+        ///     The delegate to use to write the response instead of reading into RawBytes
+        ///     Here you can also check the request details
+        /// </summary>
+        public Action<Stream, IHttpResponse> AdvancedResponseWriter { get; set; }
+        
+        /// <summary>
+        ///     The delegate to use to write the response instead of reading into RawBytes
+        /// </summary>
+        public Action<Stream> ResponseWriter { get; set; }
 
-		private void PreparePostBody(HttpWebRequest webRequest)
-		{
-			if(HasFiles)
-			{
-				webRequest.ContentType = GetMultipartFormContentType();
-			}
-			else if(HasParameters)
-			{
-				webRequest.ContentType = "application/x-www-form-urlencoded";
-				RequestBody = EncodeParameters();
-			}
-			else if(HasBody)
-			{
-				webRequest.ContentType = RequestContentType;
-			}
-		}
-		
-		private static void WriteStringTo(Stream stream, string toWrite)
-		{
-			var bytes = _defaultEncoding.GetBytes(toWrite);
-			stream.Write(bytes, 0, bytes.Length);
-		}
-		
-		private void WriteMultipartFormData(Stream requestStream)
-		{
-			foreach (var param in Parameters)
-			{
-				WriteStringTo(requestStream, GetMultipartFormData(param));
-			}
+        /// <summary>
+        ///     Collection of files to be sent with request
+        /// </summary>
+        public IList<HttpFile> Files { get; }
 
-			foreach (var file in Files)
-			{
-				// Add just the first part of this param, since we will write the file data directly to the Stream
-				WriteStringTo(requestStream, GetMultipartFileHeader(file));
+        /// <summary>
+        ///     Whether or not HTTP 3xx response redirects should be automatically followed
+        /// </summary>
+        public bool FollowRedirects { get; set; }
 
-				// Write the file data directly to the Stream, rather than serializing it to a string.
-				file.Writer(requestStream);
-				WriteStringTo(requestStream, _lineBreak);
-			}
+        /// <summary>
+        ///     Whether or not to use pipelined connections
+        /// </summary>
+        public bool Pipelined { get; set; }
 
-			WriteStringTo(requestStream, GetMultipartFooter());
-		}
+        /// <summary>
+        ///     X509CertificateCollection to be sent with request
+        /// </summary>
+        public X509CertificateCollection ClientCertificates { get; set; }
 
-		private static void ExtractResponseData(HttpResponse response, HttpWebResponse webResponse)
-		{
-			using (webResponse)
-			{
-#if FRAMEWORK
-				response.ContentEncoding = webResponse.ContentEncoding;
-				response.Server = webResponse.Server;
-#endif
-				response.ContentType = webResponse.ContentType;
-				response.ContentLength = webResponse.ContentLength;
-#if WINDOWS_PHONE
-                if (string.Equals(webResponse.Headers[HttpRequestHeader.ContentEncoding], "gzip", StringComparison.OrdinalIgnoreCase))
-                    response.RawBytes = new GZipStream(webResponse.GetResponseStream()).ReadAsBytes();
+        /// <summary>
+        ///     Maximum number of automatic redirects to follow if FollowRedirects is true
+        /// </summary>
+        public int? MaxRedirects { get; set; }
+
+        /// <summary>
+        ///     Determine whether or not the "default credentials" (e.g. the user account under which the current process is
+        ///     running) ///     will be sent along to the server.
+        /// </summary>
+        public bool UseDefaultCredentials { get; set; }
+
+        /// <summary>
+        ///	    The ConnectionGroupName property enables you to associate a request with a connection group. 
+        /// </summary>
+        public string ConnectionGroupName { get; set; }
+
+        /// <summary>
+        ///     Encoding for the request, UTF8 is the default
+        /// </summary>
+        public Encoding Encoding { get; set; } = Encoding.UTF8;
+
+        /// <summary>
+        ///     HTTP headers to be sent with request
+        /// </summary>
+        public IList<HttpHeader> Headers { get; }
+
+        /// <summary>
+        ///     HTTP parameters (QueryString or Form values) to be sent with request
+        /// </summary>
+        public IList<HttpParameter> Parameters { get; }
+
+        /// <summary>
+        ///     HTTP cookies to be sent with request
+        /// </summary>
+        public IList<HttpCookie> Cookies { get; }
+
+        /// <summary>
+        ///     Request body to be sent with request
+        /// </summary>
+        public string RequestBody { get; set; }
+
+        /// <summary>
+        ///     Content type of the request body.
+        /// </summary>
+        public string RequestContentType { get; set; }
+
+        /// <summary>
+        ///     An alternative to RequestBody, for when the caller already has the byte array.
+        /// </summary>
+        public byte[] RequestBodyBytes { get; set; }
+
+        /// <summary>
+        ///     URL to call for this request
+        /// </summary>
+        public Uri Url { get; set; }
+
+        /// <summary>
+        /// Explicit Host header value to use in requests independent from the request URI.
+        /// If null, default host value extracted from URI is used.
+        /// </summary>
+        public string Host { get; set; }
+
+        /// <summary>
+        /// List of Allowed Decompression Methods
+        /// </summary>
+        public IList<DecompressionMethods> AllowedDecompressionMethods { get; set; }
+
+        /// <summary>
+        ///     Flag to send authorisation header with the HttpWebRequest
+        /// </summary>
+        public bool PreAuthenticate { get; set; }
+
+        /// <summary>
+        /// Flag to reuse same connection in the HttpWebRequest
+        /// </summary>
+        public bool UnsafeAuthenticatedConnectionSharing { get; set; }
+
+        /// <summary>
+        ///     Proxy info to be sent with request
+        /// </summary>
+        public IWebProxy Proxy { get; set; }
+
+        /// <summary>
+        ///     Caching policy for requests created with this wrapper.
+        /// </summary>
+        public RequestCachePolicy CachePolicy { get; set; }
+
+        /// <summary>
+        ///     Callback function for handling the validation of remote certificates.
+        /// </summary>
+        public RemoteCertificateValidationCallback RemoteCertificateValidationCallback { get; set; }
+
+        /// <summary>
+        ///     Creates an IHttp
+        /// </summary>
+        /// <returns></returns>
+        public static IHttp Create() => new Http();
+
+        protected virtual HttpWebRequest CreateWebRequest(Uri url) => (HttpWebRequest) WebRequest.Create(url);
+
+        public Action<HttpWebRequest> WebRequestConfigurator { get; set; }
+        
+        partial void AddSyncHeaderActions();
+
+        private void AddSharedHeaderActions()
+        {
+            restrictedHeaderActions.Add("Accept", (r, v) => r.Accept = v);
+            restrictedHeaderActions.Add("Content-Type", (r, v) => r.ContentType = v);
+            restrictedHeaderActions.Add("Date", (r, v) =>
+            {
+                if (DateTime.TryParse(v, out var parsed))
+                    r.Date = parsed;
+            });
+
+            restrictedHeaderActions.Add("Host", (r, v) => r.Host = v);
+
+            restrictedHeaderActions.Add("Range", AddRange);
+        }
+
+        private static string GetMultipartFormContentType()
+        {
+            return string.Format("multipart/form-data; boundary={0}", FORM_BOUNDARY);
+        }
+
+        private static string GetMultipartFileHeader(HttpFile file)
+        {
+            return string.Format(
+                "--{0}{4}Content-Disposition: form-data; name=\"{1}\"; filename=\"{2}\"{4}Content-Type: {3}{4}{4}",
+                FORM_BOUNDARY, file.Name, file.FileName, file.ContentType ?? "application/octet-stream", LINE_BREAK);
+        }
+
+        private string GetMultipartFormData(HttpParameter param)
+        {
+            var format = param.Name == RequestContentType
+                ? "--{0}{3}Content-Type: {4}{3}Content-Disposition: form-data; name=\"{1}\"{3}{3}{2}{3}"
+                : "--{0}{3}Content-Disposition: form-data; name=\"{1}\"{3}{3}{2}{3}";
+
+            return string.Format(format, FORM_BOUNDARY, param.Name, param.Value, LINE_BREAK, param.ContentType);
+        }
+
+        private static string GetMultipartFooter()
+        {
+            return $"--{FORM_BOUNDARY}--{LINE_BREAK}";
+        }
+
+        // handle restricted headers the .NET way - thanks @dimebrain!
+        // http://msdn.microsoft.com/en-us/library/system.net.httpwebrequest.headers.aspx
+        private void AppendHeaders(HttpWebRequest webRequest)
+        {
+            foreach (var header in Headers)
+                if (restrictedHeaderActions.ContainsKey(header.Name))
+                    restrictedHeaderActions[header.Name].Invoke(webRequest, header.Value);
                 else
-                    response.RawBytes = webResponse.GetResponseStream().ReadAsBytes();
-#else
-                response.RawBytes = webResponse.GetResponseStream().ReadAsBytes();
-#endif
-				//response.Content = GetString(response.RawBytes);
-				response.StatusCode = webResponse.StatusCode;
-				response.StatusDescription = webResponse.StatusDescription;
-				response.ResponseUri = webResponse.ResponseUri;
-				response.ResponseStatus = ResponseStatus.Completed;
+                    webRequest.Headers.Add(header.Name, header.Value);
+        }
 
-				if (webResponse.Cookies != null)
-				{
-					foreach (Cookie cookie in webResponse.Cookies)
-					{
-						response.Cookies.Add(new HttpCookie {
-							Comment = cookie.Comment,
-							CommentUri = cookie.CommentUri,
-							Discard = cookie.Discard,
-							Domain = cookie.Domain,
-							Expired = cookie.Expired,
-							Expires = cookie.Expires,
-							HttpOnly = cookie.HttpOnly,
-							Name = cookie.Name,
-							Path = cookie.Path,
-							Port = cookie.Port,
-							Secure = cookie.Secure,
-							TimeStamp = cookie.TimeStamp,
-							Value = cookie.Value,
-							Version = cookie.Version
-						});
-					}
-				}
+        private void AppendCookies(HttpWebRequest webRequest)
+        {
+            webRequest.CookieContainer = CookieContainer ?? new CookieContainer();
 
-				foreach (var headerName in webResponse.Headers.AllKeys)
-				{
-					var headerValue = webResponse.Headers[headerName];
-					response.Headers.Add(new HttpHeader { Name = headerName, Value = headerValue });
-				}
+            foreach (var httpCookie in Cookies)
+            {
+                var cookie = new Cookie
+                {
+                    Name = httpCookie.Name,
+                    Value = httpCookie.Value,
+                    Domain = webRequest.RequestUri.Host
+                };
 
-				webResponse.Close();
-			}
-		}
+                webRequest.CookieContainer.Add(cookie);
+            }
+        }
 
-#if FRAMEWORK
-		private void AddRange(HttpWebRequest r, string range)
-		{
-			System.Text.RegularExpressions.Match m = System.Text.RegularExpressions.Regex.Match(range, "=(\\d+)-(\\d+)$");
-			if (!m.Success)
-			{
-				return;
-			}
+        private string EncodeParameters()
+        {
+            var querystring = new StringBuilder();
 
-			int from = Convert.ToInt32(m.Groups[1].Value);
-			int to = Convert.ToInt32(m.Groups[2].Value);
-			r.AddRange(from, to);
-		}
-#endif
-	}
+            foreach (var p in Parameters)
+            {
+                if (querystring.Length > 1)
+                    querystring.Append("&");
+
+                querystring.AppendFormat("{0}={1}", p.Name.UrlEncode(), p.Value.UrlEncode());
+            }
+
+            return querystring.ToString();
+        }
+
+        private void PreparePostBody(WebRequest webRequest)
+        {
+            bool needsContentType = string.IsNullOrEmpty(webRequest.ContentType);
+
+            if (HasFiles || AlwaysMultipartFormData)
+            {
+                if (needsContentType)
+                    webRequest.ContentType = GetMultipartFormContentType();
+                else if (!webRequest.ContentType.Contains("boundary"))
+                    webRequest.ContentType = webRequest.ContentType + "; boundary=" + FORM_BOUNDARY; 
+            }
+            else if (HasBody)
+            {
+                if (needsContentType)
+                    webRequest.ContentType = RequestContentType;
+            }
+            else if (HasParameters)
+            {
+                if (needsContentType)
+                    webRequest.ContentType = "application/x-www-form-urlencoded";
+                RequestBody = EncodeParameters();
+            }
+        }
+
+        private void WriteStringTo(Stream stream, string toWrite)
+        {
+            var bytes = Encoding.GetBytes(toWrite);
+
+            stream.Write(bytes, 0, bytes.Length);
+        }
+
+        private void WriteMultipartFormData(Stream requestStream)
+        {
+            foreach (var param in Parameters)
+                WriteStringTo(requestStream, GetMultipartFormData(param));
+
+            foreach (var file in Files)
+            {
+                // Add just the first part of this param, since we will write the file data directly to the Stream
+                WriteStringTo(requestStream, GetMultipartFileHeader(file));
+
+                // Write the file data directly to the Stream, rather than serializing it to a string.
+                file.Writer(requestStream);
+                WriteStringTo(requestStream, LINE_BREAK);
+            }
+
+            WriteStringTo(requestStream, GetMultipartFooter());
+        }
+
+        private void ExtractResponseData(HttpResponse response, HttpWebResponse webResponse)
+        {
+            using (webResponse)
+            {
+                response.ContentEncoding = webResponse.ContentEncoding;
+                response.Server = webResponse.Server;
+                response.ProtocolVersion = webResponse.ProtocolVersion;
+                response.ContentType = webResponse.ContentType;
+                response.ContentLength = webResponse.ContentLength;
+
+                var webResponseStream = webResponse.GetResponseStream();
+
+                ProcessResponseStream(webResponseStream, response);
+
+                response.StatusCode = webResponse.StatusCode;
+                response.StatusDescription = webResponse.StatusDescription;
+                response.ResponseUri = webResponse.ResponseUri;
+                response.ResponseStatus = ResponseStatus.Completed;
+
+                if (webResponse.Cookies != null)
+                    foreach (Cookie cookie in webResponse.Cookies)
+                        response.Cookies.Add(new HttpCookie
+                        {
+                            Comment = cookie.Comment,
+                            CommentUri = cookie.CommentUri,
+                            Discard = cookie.Discard,
+                            Domain = cookie.Domain,
+                            Expired = cookie.Expired,
+                            Expires = cookie.Expires,
+                            HttpOnly = cookie.HttpOnly,
+                            Name = cookie.Name,
+                            Path = cookie.Path,
+                            Port = cookie.Port,
+                            Secure = cookie.Secure,
+                            TimeStamp = cookie.TimeStamp,
+                            Value = cookie.Value,
+                            Version = cookie.Version
+                        });
+
+                foreach (var headerName in webResponse.Headers.AllKeys)
+                {
+                    var headerValue = webResponse.Headers[headerName];
+
+                    response.Headers.Add(new HttpHeader
+                    {
+                        Name = headerName,
+                        Value = headerValue
+                    });
+                }
+
+                webResponse.Close();
+            }
+        }
+
+        private void ProcessResponseStream(Stream webResponseStream, HttpResponse response)
+        {
+            if (ResponseWriter == null)
+                response.RawBytes = webResponseStream.ReadAsBytes();
+            else
+                ResponseWriter(webResponseStream);
+
+            AdvancedResponseWriter?.Invoke(webResponseStream, response);
+        }
+
+        private static readonly Regex AddRangeRegex = new Regex("(\\w+)=(\\d+)-(\\d+)$");
+
+        private static void AddRange(HttpWebRequest r, string range)
+        {
+            var m = AddRangeRegex.Match(range);
+
+            if (!m.Success)
+                return;
+
+            string rangeSpecifier = m.Groups[1].Value;
+            long from = Convert.ToInt64(m.Groups[2].Value);
+            long to = Convert.ToInt64(m.Groups[3].Value);
+
+            r.AddRange(rangeSpecifier, from, to);
+        }
+    }
 }

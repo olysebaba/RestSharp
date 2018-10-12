@@ -1,13 +1,11 @@
-﻿using System;
+﻿using System.Runtime.Serialization;
 
 namespace RestSharp.Authenticators.OAuth
 {
-#if !SILVERLIGHT && !WINDOWS_PHONE
-	[Serializable]
-#endif
-	public enum OAuthSignatureTreatment
-	{
-		Escaped,
-		Unescaped
-	}
+    [DataContract]
+    public enum OAuthSignatureTreatment
+    {
+        Escaped,
+        Unescaped
+    }
 }

@@ -6,187 +6,96 @@ using System.Linq;
 
 namespace RestSharp.Authenticators.OAuth
 {
-	internal class WebPairCollection : IList<WebPair>
-	{
-		private IList<WebPair> _parameters;
+    internal class WebPairCollection : IList<WebPair>
+    {
+        private List<WebPair> parameters;
 
-		public virtual WebPair this[string name]
-		{
-			get { return this.SingleOrDefault(p => p.Name.Equals(name)); }
-		}
+        public WebPairCollection(IEnumerable<WebPair> parameters) => this.parameters = new List<WebPair>(parameters);
 
-		public virtual IEnumerable<string> Names
-		{
-			get { return _parameters.Select(p => p.Name); }
-		}
+        public WebPairCollection(NameValueCollection collection)
+            : this() => AddCollection(collection);
 
-		public virtual IEnumerable<string> Values
-		{
-			get { return _parameters.Select(p => p.Value); }
-		}
+        public WebPairCollection(IDictionary<string, string> collection)
+            : this() => AddCollection(collection);
 
-		public WebPairCollection(IEnumerable<WebPair> parameters)
-		{
-			_parameters = new List<WebPair>(parameters);
-		}
+        public WebPairCollection() => parameters = new List<WebPair>(0);
 
-#if !WINDOWS_PHONE && !SILVERLIGHT
-		public WebPairCollection(NameValueCollection collection) : this()
-		{
-			AddCollection(collection);
-		}
+        public WebPairCollection(int capacity) => parameters = new List<WebPair>(capacity);
 
-		public virtual void AddRange(NameValueCollection collection)
-		{
-			AddCollection(collection);
-		}
+        public virtual WebPair this[string name] => this.SingleOrDefault(p => p.Name.Equals(name));
 
-		private void AddCollection(NameValueCollection collection)
-		{
-			var parameters = collection.AllKeys.Select(key => new WebPair(key, collection[key]));
-			foreach (var parameter in parameters)
-			{
-				_parameters.Add(parameter);
-			}
-		}
-#endif
+        public virtual IEnumerable<string> Names => parameters.Select(p => p.Name);
 
-		public WebPairCollection(IDictionary<string, string> collection) : this()
-		{
-			AddCollection(collection);
-		}
+        public virtual IEnumerable<string> Values => parameters.Select(p => p.Value);
 
-		public void AddCollection(IDictionary<string, string> collection)
-		{
-			foreach (var key in collection.Keys)
-			{
-				var parameter = new WebPair(key, collection[key]);
-				_parameters.Add(parameter);
-			}
-		}
+        public virtual IEnumerator<WebPair> GetEnumerator() => parameters.GetEnumerator();
 
-		public WebPairCollection()
-		{
-			_parameters = new List<WebPair>(0);
-		}
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
-		public WebPairCollection(int capacity)
-		{
-			_parameters = new List<WebPair>(capacity);
-		}
+        public virtual void Add(WebPair parameter) => parameters.Add(parameter);
 
-		private void AddCollection(IEnumerable<WebPair> collection)
-		{
-			foreach (var parameter in collection)
-			{
-				var pair = new WebPair(parameter.Name, parameter.Value);
-				_parameters.Add(pair);
-			}
-		}
+        public virtual void Clear() => parameters.Clear();
 
-		public virtual void AddRange(WebPairCollection collection)
-		{
-			AddCollection(collection);
-		}
+        public virtual bool Contains(WebPair parameter) => parameters.Contains(parameter);
 
-		public virtual void AddRange(IEnumerable<WebPair> collection)
-		{
-			AddCollection(collection);
-		}
+        public virtual void CopyTo(WebPair[] parametersArray, int arrayIndex) =>
+            parameters.CopyTo(parametersArray, arrayIndex);
 
-		public virtual void Sort(Comparison<WebPair> comparison)
-		{
-			var sorted = new List<WebPair>(_parameters);
-			sorted.Sort(comparison);
-			_parameters = sorted;
-		}
+        public virtual bool Remove(WebPair parameter) => parameters.Remove(parameter);
 
-		public virtual bool RemoveAll(IEnumerable<WebPair> parameters)
-		{
-			var success = true;
-			var array = parameters.ToArray();
-			for (var p = 0; p < array.Length; p++)
-			{
-				var parameter = array[p];
-				success &= _parameters.Remove(parameter);
-			}
-			return success && array.Length > 0;
-		}
+        public virtual int Count => parameters.Count;
 
-		public virtual void Add(string name, string value)
-		{
-			var pair = new WebPair(name, value);
-			_parameters.Add(pair);
-		}
+        public virtual bool IsReadOnly => false;
 
-		#region IList<WebParameter> Members
+        public virtual int IndexOf(WebPair parameter) => parameters.IndexOf(parameter);
 
-		public virtual IEnumerator<WebPair> GetEnumerator()
-		{
-			return _parameters.GetEnumerator();
-		}
+        public virtual void Insert(int index, WebPair parameter) => parameters.Insert(index, parameter);
 
-		IEnumerator IEnumerable.GetEnumerator()
-		{
-			return GetEnumerator();
-		}
+        public virtual void RemoveAt(int index) => parameters.RemoveAt(index);
 
-		public virtual void Add(WebPair parameter)
-		{
-			_parameters.Add(parameter);
-		}
+        public virtual WebPair this[int index]
+        {
+            get => parameters[index];
+            set => parameters[index] = value;
+        }
 
-		public virtual void Clear()
-		{
-			_parameters.Clear();
-		}
+        public virtual void AddRange(NameValueCollection collection) => AddCollection(collection);
 
-		public virtual bool Contains(WebPair parameter)
-		{
-			return _parameters.Contains(parameter);
-		}
+        private void AddCollection(NameValueCollection collection) =>
+            parameters.AddRange(collection.AllKeys.Select(key => new WebPair(key, collection[key])));
 
-		public virtual void CopyTo(WebPair[] parameters, int arrayIndex)
-		{
-			_parameters.CopyTo(parameters, arrayIndex);
-		}
+        public void AddCollection(IDictionary<string, string> collection) =>
+            parameters.AddRange(collection.Keys.Select(key => new WebPair(key, collection[key])));
 
-		public virtual bool Remove(WebPair parameter)
-		{
-			return _parameters.Remove(parameter);
-		}
+        private void AddCollection(IEnumerable<WebPair> collection) =>
+            parameters.AddRange(collection.Select(parameter => new WebPair(parameter.Name, parameter.Value)));
 
-		public virtual int Count
-		{
-			get { return _parameters.Count; }
-		}
+        public virtual void AddRange(WebPairCollection collection) => AddCollection(collection);
 
-		public virtual bool IsReadOnly
-		{
-			get { return _parameters.IsReadOnly; }
-		}
+        public virtual void AddRange(IEnumerable<WebPair> collection) => AddCollection(collection);
 
-		public virtual int IndexOf(WebPair parameter)
-		{
-			return _parameters.IndexOf(parameter);
-		}
+        public virtual void Sort(Comparison<WebPair> comparison)
+        {
+            var sorted = new List<WebPair>(parameters);
 
-		public virtual void Insert(int index, WebPair parameter)
-		{
-			_parameters.Insert(index, parameter);
-		}
+            sorted.Sort(comparison);
 
-		public virtual void RemoveAt(int index)
-		{
-			_parameters.RemoveAt(index);
-		}
+            parameters = sorted;
+        }
 
-		public virtual WebPair this[int index]
-		{
-			get { return _parameters[index]; }
-			set { _parameters[index] = value; }
-		}
+        public virtual bool RemoveAll(IEnumerable<WebPair> parametersToRemove)
+        {
+            var array = parametersToRemove.ToArray();
+            var success = array.Aggregate(true, (current, parameter) => current & parameters.Remove(parameter));
 
-		#endregion
-	}
+            return success && array.Length > 0;
+        }
+
+        public virtual void Add(string name, string value)
+        {
+            var pair = new WebPair(name, value);
+
+            parameters.Add(pair);
+        }
+    }
 }

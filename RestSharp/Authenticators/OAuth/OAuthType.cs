@@ -1,15 +1,13 @@
-﻿using System;
+﻿using System.Runtime.Serialization;
 
 namespace RestSharp.Authenticators.OAuth
 {
-#if !SILVERLIGHT && !WINDOWS_PHONE
-	[Serializable]
-#endif
-	public enum OAuthType
-	{
-		RequestToken,
-		AccessToken,
-		ProtectedResource,
-		ClientAuthentication
-	}
+    [DataContract]
+    public enum OAuthType
+    {
+        RequestToken,
+        AccessToken,
+        ProtectedResource,
+        ClientAuthentication
+    }
 }
